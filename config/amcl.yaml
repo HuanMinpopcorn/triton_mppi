@@ -1,0 +1,31 @@
+# config/amcl.yaml
+amcl:
+  min_particles: 500
+  max_particles: 2000
+  kld_err: 0.01
+  kld_z: 0.99
+  update_min_d: 0.2
+  update_min_a: 0.5
+  resample_interval: 1
+  transform_tolerance: 0.2
+
+  laser_max_beams: 60
+  laser_max_range: 12.0
+
+  odom_alpha1: 0.2
+  odom_alpha2: 0.2
+  odom_alpha3: 0.2
+  odom_alpha4: 0.2
+  odom_alpha5: 0.1
+
+  recovery_alpha_slow: 0.001
+  recovery_alpha_fast: 0.1
+
+  tf_broadcast: true
+
+  base_frame_id: "base_link"
+  odom_frame_id: "odom"
+  global_frame_id: "map"
+
+  use_map_topic: true
+  first_map_only: false
