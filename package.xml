@@ -67,6 +67,8 @@
   <exec_depend>turtlebot3_gazebo</exec_depend>
   <exec_depend>map_server</exec_depend>
   <exec_depend>gazebo_ros</exec_depend>
+  <build_depend>costmap_2d</build_depend>
+  <exec_depend>costmap_2d</exec_depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->
