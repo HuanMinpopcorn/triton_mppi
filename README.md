@@ -4,7 +4,8 @@
 
 1. Install the required ROS package:
     ```bash
-    sudo apt install ros-noetic-navigation
+    sudo apt install ros-melodic-turtlebot3-gazebo
+    sudo apt install ros-melodic-navigation
     ```
 
 2. Ensure `amcl` is included in your ROS workspace.
