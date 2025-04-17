@@ -33,13 +33,6 @@
   <!-- Load the map -->
   <node name="map_server" pkg="map_server" type="map_server" output="screen"
   args="$(find triton_mppi)/maps/map.yaml"/> 
-  
-  <!-- <node pkg="costmap_2d" type="costmap_2d_node" name="global_costmap_node" output="screen">
-    <rosparam file="$(find triton_mppi)/config/costmap_common_params_triton.yaml" command="load" ns="global_costmap"/>
-    <rosparam file="$(find triton_mppi)/config/global_costmap_params.yaml" command="load" ns="global_costmap"/>
-  </node> -->
-
-
  
   <node pkg="rviz" type="rviz" name="rviz" args="-d $(find triton_mppi)/rviz/triton_navigation.rviz"/>
 

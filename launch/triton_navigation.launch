@@ -1,8 +1,11 @@
 <launch>
 
 
+  <!-- Triton Gazebo simulation launch -->
+  <include file="$(find triton_mppi)/launch/triton_gazebo.launch">
+  </include>
 
-    <!-- AMCL node -->
+
   <node name="amcl" pkg="amcl" type="amcl" output="screen">
     <param name="odom_frame_id" value="odom" />
     <param name="base_frame_id" value="base_link" />
@@ -17,16 +20,5 @@
     <rosparam file="$(find triton_mppi)/config/global_costmap_params.yaml" command="load" /> 
     <rosparam file="$(find triton_mppi)/config/base_local_planner_params.yaml" command="load" />
   </node>
-
-  
-  <!-- <node pkg="costmap_2d" type="costmap_2d_node" name="global_costmap_node" output="screen"> -->
-    <!-- <rosparam file="$(find triton_mppi)/config/costmap_common_params_triton.yaml" command="load" ns="global_costmap"/> -->
-    <!-- <rosparam file="$(find triton_mppi)/config/global_costmap_params.yaml" command="load" ns="global_costmap"/>
-  </node> -->
-
-  <!-- <node pkg="costmap_2d" type="costmap_2d_node" name="local_costmap_node" output="screen">
-    <rosparam file="$(find triton_mppi)/config/costmap_common_params_triton.yaml" command="load" ns="local_costmap"/>
-    <rosparam file="$(find triton_mppi)/config/local_costmap_params.yaml" command="load" ns="local_costmap"/>
-  </node> -->
 
 </launch>
