@@ -28,8 +28,6 @@
   <node pkg="tf" type="static_transform_publisher" name="map_to_world" args="0.0 0.0 0.0 0 0 0.0 /map /world 100" />
   <node pkg="triton_mppi" type="position_publisher.py" name="position_publisher" />
 
-
-
   <!-- Load the map -->
   <node name="map_server" pkg="map_server" type="map_server" output="screen"
   args="$(find triton_mppi)/maps/map.yaml"/> 
