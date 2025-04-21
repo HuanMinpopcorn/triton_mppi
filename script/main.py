@@ -2,9 +2,8 @@
 #!/usr/bin/env python3
 
 import numpy as np
-from MPPI_Controller_CPU import MPPI_Controller
+from MPPI_Controller_CPU_ROS import MPPI_Controller
 import rospy
-import matplotlib.pyplot as plt
 from geometry_msgs.msg import Twist, PoseStamped
 from gazebo_msgs.srv import GetModelState, GetModelStateRequest
 import tf.transformations
@@ -21,7 +20,7 @@ class SimpleModel:
         self.cmd_vel_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
 
         # Initialize subscriber for goal poses from RViz
-        self.goal_sub = rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.goal_callback)
+        self.goal_sub = rospy.Subscriber('/move_base_simple/goal2', PoseStamped, self.goal_callback)
 
         # Default goal state [x, y, theta]
         self.goal = np.array([0.0, 0.0, 0.0])
@@ -41,6 +40,8 @@ class SimpleModel:
 
         # Initialize Twist message for publishing
         self.twist_msg = Twist()
+
+        
 
     def goal_callback(self, msg):
         """
@@ -136,9 +137,9 @@ def main():
 
     # MPPI parameters
     K = 1000  # number of samples
-    N = 15    # time horizon
+    N = 25    # time horizon
     num_opt = 1  # number of optimization iterations
-    dt = 0.1   # timestep
+    dt = 0.05   # timestep
     T = 5 # total time
 
     # Control limits covariance
@@ -166,7 +167,7 @@ def main():
         nu=nu,
         lambda_=lambda_,
         R=R,
-        goal=model.goal,
+        goal=model.goal
     )
 
     # Get initial state from Gazebo
@@ -243,19 +244,6 @@ def main():
                     stop_msg = Twist()
                     model.cmd_vel_pub.publish(stop_msg)
 
-                    # Plot the trajectory
-                    plt.figure(figsize=(10, 8))
-                    plt.plot(current_state_log[0, :i+1], current_state_log[1, :i+1], 'b-', label='Real Trajectory')
-                    plt.plot(initial_state[0], initial_state[1], 'go', markersize=10, label='Initial State')
-                    plt.plot(model.goal[0], model.goal[1], 'ro', markersize=10, label='Goal State')
-                    plt.xlabel('X')
-                    plt.ylabel('Y')
-                    plt.title('MPPI Optimal Trajectory')
-                    plt.legend()
-                    plt.grid(True)
-                    plt.axis('equal')
-                    plt.show()
-
                 i += 1
             elif running and i >= int(T/dt):
                 # We've reached the maximum time steps
@@ -265,19 +253,6 @@ def main():
                 # Stop the robot
                 stop_msg = Twist()
                 model.cmd_vel_pub.publish(stop_msg)
-
-                # Plot the trajectory
-                plt.figure(figsize=(10, 8))
-                plt.plot(current_state_log[0, :], current_state_log[1, :], 'b-', label='Real Trajectory')
-                plt.plot(initial_state[0], initial_state[1], 'go', markersize=10, label='Initial State')
-                plt.plot(model.goal[0], model.goal[1], 'ro', markersize=10, label='Goal State')
-                plt.xlabel('X')
-                plt.ylabel('Y')
-                plt.title('MPPI Optimal Trajectory')
-                plt.legend()
-                plt.grid(True)
-                plt.axis('equal')
-                plt.show()
 
             # Sleep to maintain the control loop rate
             rate.sleep()
