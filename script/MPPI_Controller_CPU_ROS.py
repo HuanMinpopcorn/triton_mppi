@@ -1,4 +1,3 @@
-
 """
 @brief: Python implementation of MPPI Controller (CPU Version)
 @authors: Adapted from MATLAB implementation
@@ -16,7 +15,7 @@ from geometry_msgs.msg import Point, PoseStamped
 from visualization_msgs.msg import Marker, MarkerArray
 
 class MPPI_Controller:
-    def __init__(self, K, N, num_opt, dt, Sigma_c, nu, lambda_, R, goal, occupancy_grid=None, costmap_topic='/local_costmap/costmap'):
+    def __init__(self, K, N, num_opt, dt, Sigma_c, nu, lambda_, R, goal, occupancy_grid=None, costmap_topic='/move_base/local_costmap/costmap'):
         """
         Initialize MPPI Controller
 
@@ -60,7 +59,7 @@ class MPPI_Controller:
         # Cost weights
         self.weight_goal_stage = 1.0
         self.weight_goal_terminate = 1.0
-        self.obstacle_weight = 100.0  # Weight for obstacle avoidance
+        self.obstacle_weight = 1000.0  # Weight for obstacle avoidance
 
         # Costmap variables using double buffering approach
         self.costmap = None  # Will hold the entire costmap as a single dictionary
@@ -71,6 +70,9 @@ class MPPI_Controller:
 
         # Subscribe to costmap topic
         self.costmap_sub = rospy.Subscriber(costmap_topic, OccupancyGrid, self.costmap_callback)
+
+        # Initialize trajectory publisher
+        self.trajectory_pub = rospy.Publisher('/mppi/trajectory', Marker, queue_size=1)
 
     def costmap_callback(self, msg):
         """
@@ -159,74 +161,46 @@ class MPPI_Controller:
         costmap = self.costmap
 
         try:
-            # Get the transform from world frame to costmap frame
-            costmap_frame = costmap.get('frame_id', 'map')  # Default to 'map' if not specified
-            world_frame = 'world'  # Or whatever frame the robot position is in
+            # Define robot footprint based on the costmap_common_params
+            robot_radius = 0.15  # meters - from the footprint in costmap_common_params_triton.yaml
 
-            # Create a PoseStamped for the robot position in world frame
-            robot_pose = PoseStamped()
-            robot_pose.header.frame_id = world_frame
-            robot_pose.header.stamp = rospy.Time(0)
-            robot_pose.pose.position.x = x
-            robot_pose.pose.position.y = y
-            robot_pose.pose.position.z = 0.0
+            # Direct conversion from world to costmap coordinates without TF
+            # Adjust for the costmap origin
+            adjusted_x = x - costmap['origin_x']
+            adjusted_y = y - costmap['origin_y']
+            
+            # Convert to cell indices
+            center_x = int(adjusted_x / costmap['resolution'])
+            center_y = int(adjusted_y / costmap['resolution'])
+            
+            # Calculate how many cells to check based on robot radius
+            cells_to_check = int(robot_radius / costmap['resolution'])
+            
+            # Check if the robot center is far outside the map bounds
+            if (center_x < -cells_to_check or center_x >= costmap['width'] + cells_to_check or
+                center_y < -cells_to_check or center_y >= costmap['height'] + cells_to_check):
+                # Robot is completely outside the map
+                return False
+            
+            # Check all cells within the robot footprint
+            for dx in range(-cells_to_check, cells_to_check + 1):
+                for dy in range(-cells_to_check, cells_to_check + 1):
+                    # Skip cells outside the circular footprint
+                    if dx*dx + dy*dy > cells_to_check*cells_to_check:
+                        continue
+                    
+                    check_x = center_x + dx
+                    check_y = center_y + dy
+                    
+                    # Check if within bounds and is obstacle
+                    if (0 <= check_x < costmap['width'] and
+                        0 <= check_y < costmap['height'] and
+                        costmap['occupancy_grid'][check_y, check_x]):
+                        return True  # Collision detected
 
-            # Convert theta to quaternion
-            q = tf.transformations.quaternion_from_euler(0, 0, theta)
-            robot_pose.pose.orientation.x = q[0]
-            robot_pose.pose.orientation.y = q[1]
-            robot_pose.pose.orientation.z = q[2]
-            robot_pose.pose.orientation.w = q[3]
-
-            # Wait for the transform to be available
-            if self.tf_listener.waitForTransform(costmap_frame, world_frame, rospy.Time(0), rospy.Duration(0.1)):
-                # Transform the robot position to costmap frame
-                robot_pose_costmap = self.tf_listener.transformPose(costmap_frame, robot_pose)
-
-                # Extract the position in costmap frame
-                map_x = robot_pose_costmap.pose.position.x
-                map_y = robot_pose_costmap.pose.position.y
-
-                # Define robot footprint as a circle
-                robot_radius = 0.2  # meters - adjust based on your robot's size
-
-                # Convert map coordinates to grid cell indices
-                center_x = int(map_x / costmap['resolution'])
-                center_y = int(map_y / costmap['resolution'])
-
-                # Calculate how many cells to check based on robot radius
-                cells_to_check = int(robot_radius / costmap['resolution'])
-
-                # Check if the robot center is far outside the map bounds
-                if (center_x < -cells_to_check or center_x >= costmap['width'] + cells_to_check or
-                    center_y < -cells_to_check or center_y >= costmap['height'] + cells_to_check):
-                    # Robot is completely outside the map
-                    return False  # Alternatively, return True if you want to be conservative
-
-                # Check all cells within the robot footprint
-                for dx in range(-cells_to_check, cells_to_check + 1):
-                    for dy in range(-cells_to_check, cells_to_check + 1):
-                        # Skip cells outside the circular footprint
-                        if dx*dx + dy*dy > cells_to_check*cells_to_check:
-                            continue
-
-                        check_x = center_x + dx
-                        check_y = center_y + dy
-
-                        # Check if within bounds and is obstacle
-                        if (0 <= check_x < costmap['width'] and
-                            0 <= check_y < costmap['height'] and
-                            costmap['occupancy_grid'][check_y, check_x]):
-                            return True  # Collision detected
-            else:
-                # If transform is not available, use a simpler approach
-                rospy.logwarn(f"Transform from {world_frame} to {costmap_frame} not available. Using simple transformation.")
-                return self._simple_collision_check(x, y, costmap)
-
-        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
-            rospy.logwarn(f"TF Error in collision checking: {e}.")
+        except Exception as e:
+            rospy.logwarn(f"Error in collision checking: {e}")
     
-
         return False  # No collision
 
 
@@ -375,9 +349,9 @@ class MPPI_Controller:
             # Save optimized control sequence
             self.optimized_ctrl_sequence = self.ctrl_sequence.copy()
 
-        # # Visualize the costmap and trajectory (if available)
+        # # Visualize the optimal trajectory (if available)
         # try:
-        #     self.visualize_costmap_and_trajectory()
+        #     self.visualize_trajectory()
         # except Exception as e:
         #     rospy.logwarn(f"Visualization failed: {e}")
 
@@ -422,83 +396,46 @@ class MPPI_Controller:
 
         return optimal_cost
 
-    # def visualize_costmap_and_trajectory(self):
-    #     """
-    #     Visualize the costmap and planned trajectory using ROS markers
-    #     """
-    #     if not self.costmap_received or self.costmap is None:
-    #         rospy.logwarn("Cannot visualize costmap: No costmap data received yet")
-    #         return
+    def visualize_trajectory(self):
+        """
+        Visualize the planned trajectory using ROS markers
+        """
+        if not self.costmap_received or self.costmap is None:
+            rospy.logwarn("Cannot visualize trajectory: No costmap data received yet")
+            return
 
-    #     try:
-    #         # Create publishers if they don't exist yet
-    #         if not hasattr(self, 'costmap_pub'):
-    #             self.costmap_pub = rospy.Publisher('/mppi/costmap_visualization', MarkerArray, queue_size=1, latch=True)
+        try:
+            # Create publisher if it doesn't exist yet
+            if not hasattr(self, 'trajectory_pub'):
+                self.trajectory_pub = rospy.Publisher('/mppi/trajectory', Marker, queue_size=1)
 
-    #         if not hasattr(self, 'trajectory_pub'):
-    #             self.trajectory_pub = rospy.Publisher('/mppi/trajectory', Marker, queue_size=1)
+            # Get a reference to the current costmap (atomic operation)
+            costmap = self.costmap
 
-    #         # Get a reference to the current costmap (atomic operation)
-    #         costmap = self.costmap
+            # Visualize planned trajectory
+            trajectory = self.get_optimal_trajectory()
 
-    #         # Visualize costmap as cube markers
-    #         marker_array = MarkerArray()
-    #         marker_id = 0
+            traj_marker = Marker()
+            traj_marker.header.frame_id = costmap['frame_id']  # Use the costmap's frame
+            traj_marker.header.stamp = rospy.Time.now()
+            traj_marker.ns = "trajectory"
+            traj_marker.id = 0
+            traj_marker.type = Marker.LINE_STRIP
+            traj_marker.action = Marker.ADD
+            traj_marker.scale.x = 0.05  # Line width
+            traj_marker.color.g = 1.0
+            traj_marker.color.a = 1.0
+            traj_marker.pose.orientation.w = 1.0
 
-    #         # Create a marker for occupied cells
-    #         obstacle_marker = Marker()
-    #         obstacle_marker.header.frame_id = costmap['frame_id']  # Use the costmap's frame
-    #         obstacle_marker.header.stamp = rospy.Time.now()
-    #         obstacle_marker.ns = "costmap"
-    #         obstacle_marker.id = marker_id
-    #         obstacle_marker.type = Marker.CUBE_LIST
-    #         obstacle_marker.action = Marker.ADD
-    #         obstacle_marker.scale.x = costmap['resolution']
-    #         obstacle_marker.scale.y = costmap['resolution']
-    #         obstacle_marker.scale.z = 0.1  # Height of the cubes
-    #         obstacle_marker.color.r = 1.0
-    #         obstacle_marker.color.g = 0.0
-    #         obstacle_marker.color.b = 0.0
-    #         obstacle_marker.color.a = 0.7
-    #         obstacle_marker.pose.orientation.w = 1.0
+            # Add points for trajectory
+            for i in range(trajectory.shape[1]):
+                p = Point()
+                p.x = trajectory[0, i]
+                p.y = trajectory[1, i]
+                p.z = 0.1  # Slightly above ground
+                traj_marker.points.append(p)
 
-    #         # Add points for occupied cells
-    #         for y in range(costmap['height']):
-    #             for x in range(costmap['width']):
-    #                 if costmap['occupancy_grid'][y, x]:
-    #                     p = Point()
-    #                     p.x = costmap['origin_x'] + (x + 0.5) * costmap['resolution']
-    #                     p.y = costmap['origin_y'] + (y + 0.5) * costmap['resolution']
-    #                     p.z = 0.05  # Slightly above ground
-    #                     obstacle_marker.points.append(p)
+            self.trajectory_pub.publish(traj_marker)
 
-    #         marker_array.markers.append(obstacle_marker)
-    #         self.costmap_pub.publish(marker_array)
-
-    #         # Visualize planned trajectory
-    #         trajectory = self.get_optimal_trajectory()
-
-    #         traj_marker = Marker()
-    #         traj_marker.header.frame_id = costmap['frame_id']  # Use the costmap's frame
-    #         traj_marker.header.stamp = rospy.Time.now()
-    #         traj_marker.ns = "trajectory"
-    #         traj_marker.id = 0
-    #         traj_marker.type = Marker.LINE_STRIP
-    #         traj_marker.action = Marker.ADD
-    #         traj_marker.scale.x = 0.05  # Line width
-    #         traj_marker.color.g = 1.0
-    #         traj_marker.color.a = 1.0
-    #         traj_marker.pose.orientation.w = 1.0
-
-    #         # Add points for trajectory
-    #         for i in range(trajectory.shape[1]):
-    #             p = Point()
-    #             p.x = trajectory[0, i]
-    #             p.y = trajectory[1, i]
-    #             p.z = 0.1  # Slightly above ground
-    #             traj_marker.points.append(p)
-
-    #         self.trajectory_pub.publish(traj_marker)
-
-    #     except Exception as e:
-    #         rospy.logerr(f"Error visualizing costmap: {e}")
+        except Exception as e:
+            rospy.logerr(f"Error visualizing trajectory: {e}")
