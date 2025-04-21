@@ -244,6 +244,19 @@ def main():
                     stop_msg = Twist()
                     model.cmd_vel_pub.publish(stop_msg)
 
+                    # Plot the trajectory
+                    plt.figure(figsize=(10, 8))
+                    plt.plot(current_state_log[0, :i+1], current_state_log[1, :i+1], 'b-', label='Real Trajectory')
+                    plt.plot(initial_state[0], initial_state[1], 'go', markersize=10, label='Initial State')
+                    plt.plot(model.goal[0], model.goal[1], 'ro', markersize=10, label='Goal State')
+                    plt.xlabel('X')
+                    plt.ylabel('Y')
+                    plt.title('MPPI Optimal Trajectory')
+                    plt.legend()
+                    plt.grid(True)
+                    plt.axis('equal')
+                    plt.show()
+
                 i += 1
             elif running and i >= int(T/dt):
                 # We've reached the maximum time steps
@@ -253,6 +266,19 @@ def main():
                 # Stop the robot
                 stop_msg = Twist()
                 model.cmd_vel_pub.publish(stop_msg)
+
+                # Plot the trajectory
+                plt.figure(figsize=(10, 8))
+                plt.plot(current_state_log[0, :], current_state_log[1, :], 'b-', label='Real Trajectory')
+                plt.plot(initial_state[0], initial_state[1], 'go', markersize=10, label='Initial State')
+                plt.plot(model.goal[0], model.goal[1], 'ro', markersize=10, label='Goal State')
+                plt.xlabel('X')
+                plt.ylabel('Y')
+                plt.title('MPPI Optimal Trajectory')
+                plt.legend()
+                plt.grid(True)
+                plt.axis('equal')
+                plt.show()
 
             # Sleep to maintain the control loop rate
             rate.sleep()
