@@ -14,10 +14,10 @@ Run the following command to install the necessary ROS packages:
 sudo apt install ros-noetic-navigation ros-noetic-turtlebot3-gazebo
 ```
 
-### Additional Dependencies
+<!-- ### Additional Dependencies
 
 1. Ensure the `amcl` package is included in your ROS workspace.
-2. Follow the [Stingray Camera README](https://gitlab.com/HCRLab/stingray-robotics/stingray_camera/-/tree/main) for download and setup instructions.
+2. Follow the [Stingray Camera README](https://gitlab.com/HCRLab/stingray-robotics/stingray_camera/-/tree/main) for download and setup instructions. -->
 
 ## How to Run the Package  
 

@@ -1,7 +1,7 @@
 # config/amcl.yaml
 amcl:
-  min_particles: 500
-  max_particles: 2000
+  min_particles: 100
+  max_particles: 500
   kld_err: 0.01
   kld_z: 0.99
   update_min_d: 0.2
