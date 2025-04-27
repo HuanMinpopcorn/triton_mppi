@@ -4,10 +4,13 @@
 import numpy as np
 from MPPI_Controller_CPU_ROS import MPPI_Controller
 import rospy
-import matplotlib.pyplot as plt
 from geometry_msgs.msg import Twist, PoseStamped
 from gazebo_msgs.srv import GetModelState, GetModelStateRequest
 import tf.transformations
+import os
+import pickle
+from nav_msgs.msg import OccupancyGrid
+import time
 
 class SimpleModel:
     def __init__(self, model_name='triton'):
@@ -138,9 +141,9 @@ def main():
 
     # MPPI parameters
     K = 1000  # number of samples
-    N = 15    # time horizon
+    N = 25    # time horizon
     num_opt = 1  # number of optimization iterations
-    dt = 0.1   # timestep
+    dt = 0.05   # timestep
     T = 5 # total time
 
     # Control limits covariance
@@ -177,10 +180,24 @@ def main():
     current_state_log = np.zeros((3, int(T/dt)))
     current_state_log[:, 0] = current_state
 
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(os.path.dirname(script_dir))
+    data_dir = os.path.join(parent_dir, "results")
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
     # Main control loop
     rate = rospy.Rate(1/dt)  # Control loop rate
     i = 0
     running = False
+    
+    # Data collection for logging
+    trajectory_data = {
+        'timestamps': [],
+        'states': [],
+        'costmaps': [],
+        'goals': [],
+        'controls': []
+    }
 
     try:
         while not rospy.is_shutdown():
@@ -210,18 +227,37 @@ def main():
                 running = True
                 model.new_goal_received = False
                 rospy.loginfo("Starting navigation to goal...")
+                
+                # Reset data collection for new goal
+                trajectory_data = {
+                    'timestamps': [],
+                    'states': [],
+                    'costmaps': [],
+                    'goals': [],
+                    'controls': []
+                }
 
             # If we're running and haven't reached the maximum time steps
             if running and i < int(T/dt):
                 # Get current state
                 current_state = model.get_current_state()
                 current_state_log[:, i] = current_state
+                
+                # Record timestamp, state, costmap, and goal
+                timestamp = rospy.Time.now().to_sec()
+                trajectory_data['timestamps'].append(timestamp)
+                trajectory_data['states'].append(current_state.copy())
+                trajectory_data['costmaps'].append(controller.costmap)
+                trajectory_data['goals'].append(model.goal.copy())
 
                 # Set initial state for controller
                 controller.set_initial_state(current_state)
 
                 # Compute optimal control
                 optimal_control_sequence = controller.optimize()
+                
+                # Record control
+                trajectory_data['controls'].append(optimal_control_sequence[:, 0].copy())
 
                 # Execute control
                 model.step(optimal_control_sequence[:, 0], dt)
@@ -244,19 +280,15 @@ def main():
                     # Stop the robot
                     stop_msg = Twist()
                     model.cmd_vel_pub.publish(stop_msg)
+                    
+                    # Save trajectory data
+                    timestamp_str = time.strftime("%Y%m%d-%H%M%S")
 
-                    # Plot the trajectory
-                    # plt.figure(figsize=(10, 8))
-                    # plt.plot(current_state_log[0, :i+1], current_state_log[1, :i+1], 'b-', label='Real Trajectory')
-                    # plt.plot(initial_state[0], initial_state[1], 'go', markersize=10, label='Initial State')
-                    # plt.plot(model.goal[0], model.goal[1], 'ro', markersize=10, label='Goal State')
-                    # plt.xlabel('X')
-                    # plt.ylabel('Y')
-                    # plt.title('MPPI Optimal Trajectory')
-                    # plt.legend()
-                    # plt.grid(True)
-                    # plt.axis('equal')
-                    # plt.show()
+                    filename = os.path.join(data_dir, f"trajectory_data_{timestamp_str}.pkl")
+                    with open(filename, 'wb') as f:
+                        pickle.dump(trajectory_data, f)
+                    
+                    rospy.loginfo(f"Trajectory data saved to {filename}")
 
                 i += 1
             elif running and i >= int(T/dt):
@@ -267,19 +299,18 @@ def main():
                 # Stop the robot
                 stop_msg = Twist()
                 model.cmd_vel_pub.publish(stop_msg)
-
-                # Plot the trajectory
-                plt.figure(figsize=(10, 8))
-                plt.plot(current_state_log[0, :], current_state_log[1, :], 'b-', label='Real Trajectory')
-                plt.plot(initial_state[0], initial_state[1], 'go', markersize=10, label='Initial State')
-                plt.plot(model.goal[0], model.goal[1], 'ro', markersize=10, label='Goal State')
-                plt.xlabel('X')
-                plt.ylabel('Y')
-                plt.title('MPPI Optimal Trajectory')
-                plt.legend()
-                plt.grid(True)
-                plt.axis('equal')
-                plt.show()
+                
+                # # Save trajectory data even if goal not reached
+                # timestamp_str = time.strftime("%Y%m%d-%H%M%S")
+                # data_dir = os.path.expanduser("~/.ros/mppi_data")
+                # if not os.path.exists(data_dir):
+                #     os.makedirs(data_dir)
+                
+                # filename = os.path.join(data_dir, f"trajectory_data_incomplete_{timestamp_str}.pkl")
+                # with open(filename, 'wb') as f:
+                #     pickle.dump(trajectory_data, f)
+                
+                # rospy.loginfo(f"Incomplete trajectory data saved to {filename}")
 
             # Sleep to maintain the control loop rate
             rate.sleep()
