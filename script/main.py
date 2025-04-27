@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 
 import numpy as np
@@ -45,7 +44,11 @@ class SimpleModel:
         # Initialize Twist message for publishing
         self.twist_msg = Twist()
 
-        
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(os.path.dirname(script_dir))
+        data_dir = os.path.join(parent_dir, "results")
+        if not os.path.exists(data_dir):
+            os.makedirs(data_dir)
 
     def goal_callback(self, msg):
         """
@@ -180,11 +183,6 @@ def main():
     current_state_log = np.zeros((3, int(T/dt)))
     current_state_log[:, 0] = current_state
 
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    parent_dir = os.path.dirname(os.path.dirname(script_dir))
-    data_dir = os.path.join(parent_dir, "results")
-    if not os.path.exists(data_dir):
-        os.makedirs(data_dir)
     # Main control loop
     rate = rospy.Rate(1/dt)  # Control loop rate
     i = 0
@@ -299,18 +297,6 @@ def main():
                 # Stop the robot
                 stop_msg = Twist()
                 model.cmd_vel_pub.publish(stop_msg)
-                
-                # # Save trajectory data even if goal not reached
-                # timestamp_str = time.strftime("%Y%m%d-%H%M%S")
-                # data_dir = os.path.expanduser("~/.ros/mppi_data")
-                # if not os.path.exists(data_dir):
-                #     os.makedirs(data_dir)
-                
-                # filename = os.path.join(data_dir, f"trajectory_data_incomplete_{timestamp_str}.pkl")
-                # with open(filename, 'wb') as f:
-                #     pickle.dump(trajectory_data, f)
-                
-                # rospy.loginfo(f"Incomplete trajectory data saved to {filename}")
 
             # Sleep to maintain the control loop rate
             rate.sleep()
