@@ -13,7 +13,7 @@
     <arg name="use_sim_time" value="true"/>
     <arg name="debug" value="false"/>  <!-- false for real training, true for debugging -->
     <arg name="paused" value="false"/>
-    <arg name="gui" value="false" />
+    <arg name="gui" value="true" />
     <arg name="world_name" value="$(arg world_file)"/>
     <arg name="verbose" value="true"/>
     <arg name="recording" value="false"/>
@@ -26,6 +26,7 @@
   <node pkg="tf" type="static_transform_publisher" name="base_link_to_base_scan" args="0 0 0.161 0 0 0 /base_link /base_scan 100" />
   <node pkg="tf" type="static_transform_publisher" name="world_to_odom" args="0 0 0 0 0 0 /world /odom 100" />
   <node pkg="tf" type="static_transform_publisher" name="map_to_world" args="0.0 0.0 0.0 0 0 0.0 /map /world 100" />
+  <node pkg="tf" type="static_transform_publisher" name="base_link_to_camera_link" args="0.09 0 0.161 0 0 0 /base_link /camera_link 100"/>
   <node pkg="triton_mppi" type="position_publisher.py" name="position_publisher" />
 
   <!-- Load the map -->

@@ -4,13 +4,10 @@ footprint: [[0.3, 0.3], [0.3, -0.3], [-0.3, -0.3], [-0.3, 0.3]]
 robot_radius: 0.3
 
 inflation_radius: 0.55
-observation_sources: laser_scan_sensor 
 
-laser_scan_sensor: 
-    sensor_frame: base_scan
-    data_type: LaserScan
-    topic: scan
-    marking: true
-    clearing: true
+
+observation_sources: laser_scan depth_scan
+laser_scan: {sensor_frame: base_scan, data_type: LaserScan, topic: scan, marking: true, clearing: true}
+depth_scan: {sensor_frame: camera_link, data_type: LaserScan, topic: scan_depth, marking: true, clearing: true}
 
 
