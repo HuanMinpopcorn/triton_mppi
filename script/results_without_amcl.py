@@ -291,21 +291,18 @@ def main():
         return
     
     # Find all pickle files in the results directory
-    pickle_files = glob(os.path.join(results_dir, "*.pkl"))
+    pickle_file = glob(os.path.join(results_dir, "trajectory_data_without_amcl_1.pkl"))
     
-    if not pickle_files:
+    if not pickle_file:
         print(f"No pickle files found in {results_dir}")
         return
     
-    # Sort files by modification time (newest first)
-    pickle_files.sort(key=os.path.getmtime, reverse=True)
-    
     # Load the most recent file by default
-    latest_file = pickle_files[1]
-    print(f"Loading most recent trajectory data: {os.path.basename(latest_file)}")
+    data_file = pickle_file[0]
+    print(f"Loading the trajectory data: {os.path.basename(data_file)}")
     
     # Load the data
-    data = load_trajectory_data(latest_file)
+    data = load_trajectory_data(data_file)
     
     # Load the map
     map_data = None
@@ -321,15 +318,22 @@ def main():
         map_data=map_data, 
         map_origin=(-10, -10),  # Adjust based on your map's origin
         map_resolution=0.05,    # Adjust based on your map's resolution
-        title=f"Trajectory from {os.path.basename(latest_file)}"
+        title=f"Trajectory from {os.path.basename(data_file)}"
     )
     
-    # Create plots directory inside results directory
-    plots_dir = os.path.join(results_dir, "plots")
+    # Ask user if they want to save plots
+    save_plots = input("Do you want to save the plots? (y/n): ").lower().strip() == 'y'
     
-    # Save the plots
-    base_filename = os.path.splitext(os.path.basename(latest_file))[0]
-    save_trajectory_plots(figs, plots_dir, base_filename)
+    if save_plots:
+        # Create plots directory inside results directory
+        plots_dir = os.path.join(results_dir, "plots_without_amcl")
+        
+        # Save the plots
+        base_filename = os.path.splitext(os.path.basename(latest_file))[0]
+        save_trajectory_plots(figs, plots_dir, base_filename)
+        print("Plots saved successfully.")
+    else:
+        print("Plots not saved.")
     
     # Show the plots
     plt.show()

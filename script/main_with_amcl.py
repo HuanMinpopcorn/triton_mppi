@@ -3,7 +3,7 @@
 import numpy as np
 from MPPI_Controller_CPU_ROS import MPPI_Controller
 import rospy
-from geometry_msgs.msg import Twist, PoseStamped
+from geometry_msgs.msg import Twist, PoseStamped, PoseWithCovarianceStamped
 from gazebo_msgs.srv import GetModelState, GetModelStateRequest
 import tf.transformations
 import os
@@ -25,11 +25,18 @@ class SimpleModel:
         # Initialize subscriber for goal poses from RViz
         self.goal_sub = rospy.Subscriber('/move_base_simple/goal2', PoseStamped, self.goal_callback)
 
+        # Initialize subscriber for AMCL pose
+        self.amcl_pose_sub = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, self.amcl_pose_callback)
+        
+        # Current pose from AMCL
+        self.current_pose = np.array([0.0, 0.0, 0.0])
+        self.pose_received = False
+
         # Default goal state [x, y, theta]
         self.goal = np.array([0.0, 0.0, 0.0])
         self.new_goal_received = False
 
-        # Initialize service client for get_model_state
+        # Initialize service client for get_model_state (kept as fallback)
         rospy.wait_for_service('/gazebo/get_model_state')
         self.get_state_service = rospy.ServiceProxy('/gazebo/get_model_state', GetModelState)
 
@@ -44,11 +51,30 @@ class SimpleModel:
         # Initialize Twist message for publishing
         self.twist_msg = Twist()
 
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        parent_dir = os.path.dirname(os.path.dirname(script_dir))
-        data_dir = os.path.join(parent_dir, "results")
-        if not os.path.exists(data_dir):
-            os.makedirs(data_dir)
+    def amcl_pose_callback(self, msg):
+        """
+        Callback function for AMCL pose messages
+
+        Args:
+            msg (PoseWithCovarianceStamped): AMCL pose message
+        """
+        # Extract position
+        x = msg.pose.pose.position.x
+        y = msg.pose.pose.position.y
+
+        # Extract orientation (quaternion) and convert to euler angles
+        qx = msg.pose.pose.orientation.x
+        qy = msg.pose.pose.orientation.y
+        qz = msg.pose.pose.orientation.z
+        qw = msg.pose.pose.orientation.w
+
+        # Convert quaternion to euler angles
+        euler = tf.transformations.euler_from_quaternion([qx, qy, qz, qw])
+        theta = euler[2]  # yaw angle
+
+        # Update current pose
+        self.current_pose = np.array([x, y, theta])
+        self.pose_received = True
 
     def goal_callback(self, msg):
         """
@@ -79,10 +105,45 @@ class SimpleModel:
 
     def get_current_state(self):
         """
-        Get the current state of the robot from Gazebo
+        Get the current state of the robot from AMCL
 
         Returns:
             numpy.ndarray: Current state [x, y, theta]
+        """
+        if self.pose_received:
+            return self.current_pose
+        else:
+            rospy.logwarn("No AMCL pose received yet, falling back to Gazebo pose")
+            try:
+                # Call the service to get model state as fallback
+                result = self.get_state_service(self.model_state_req)
+
+                # Extract position
+                x = result.pose.position.x
+                y = result.pose.position.y
+
+                # Extract orientation (quaternion) and convert to euler angles
+                qx = result.pose.orientation.x
+                qy = result.pose.orientation.y
+                qz = result.pose.orientation.z
+                qw = result.pose.orientation.w
+
+                # Convert quaternion to euler angles
+                euler = tf.transformations.euler_from_quaternion([qx, qy, qz, qw])
+                theta = euler[2]  # yaw angle
+
+                return np.array([x, y, theta])
+
+            except rospy.ServiceException as e:
+                rospy.logerr("Service call failed: %s" % e)
+                return np.array([0.0, 0.0, 0.0])
+                
+    def get_real_state(self):
+        """
+        Get the real state of the robot from Gazebo
+
+        Returns:
+            numpy.ndarray: Real state [x, y, theta]
         """
         try:
             # Call the service to get model state
@@ -146,8 +207,8 @@ def main():
     K = 1000  # number of samples
     N = 25    # time horizon
     num_opt = 1  # number of optimization iterations
-    dt = 0.05   # timestep
-    T = 5 # total time
+    dt = 1   # timestep
+    T = 20 # total time
 
     # Control limits covariance
     Sigma_c = np.diag([0.5, 0.3])  # variance for [v, omega]
@@ -177,7 +238,7 @@ def main():
         goal=model.goal
     )
 
-    # Get initial state from Gazebo
+    # Get initial state from AMCL
     initial_state = model.get_current_state()
     current_state = initial_state.copy()
     current_state_log = np.zeros((3, int(T/dt)))
@@ -192,10 +253,17 @@ def main():
     trajectory_data = {
         'timestamps': [],
         'states': [],
+        'real_states': [],
         'costmaps': [],
         'goals': [],
         'controls': []
     }
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(script_dir)
+    data_dir = os.path.join(parent_dir, "results")
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
 
     try:
         while not rospy.is_shutdown():
@@ -230,6 +298,7 @@ def main():
                 trajectory_data = {
                     'timestamps': [],
                     'states': [],
+                    'real_states': [],
                     'costmaps': [],
                     'goals': [],
                     'controls': []
@@ -237,14 +306,18 @@ def main():
 
             # If we're running and haven't reached the maximum time steps
             if running and i < int(T/dt):
-                # Get current state
+                # Get current state from AMCL
                 current_state = model.get_current_state()
                 current_state_log[:, i] = current_state
                 
-                # Record timestamp, state, costmap, and goal
+                # Get real state from Gazebo
+                real_state = model.get_real_state()
+                
+                # Record timestamp, state, real state, costmap, and goal
                 timestamp = rospy.Time.now().to_sec()
                 trajectory_data['timestamps'].append(timestamp)
                 trajectory_data['states'].append(current_state.copy())
+                trajectory_data['real_states'].append(real_state.copy())
                 trajectory_data['costmaps'].append(controller.costmap)
                 trajectory_data['goals'].append(model.goal.copy())
 
@@ -264,7 +337,7 @@ def main():
                 controller.shift_ctrl_sequence()
 
                 # Print progress
-                print(f"Time step: {i}, Current state: {current_state}, Goal: {model.goal}")
+                print(f"Time step: {i}, Current state: {current_state}, Real state: {real_state}, Goal: {model.goal}")
 
                 # Check if we've reached the goal
                 dist_to_goal = np.sqrt((current_state[0] - model.goal[0])**2 +
