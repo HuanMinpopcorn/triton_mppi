@@ -76,3 +76,9 @@ sudo apt install ros-noetic-navigation ros-noetic-turtlebot3-gazebo
     ```
 
 > **Note:** After executing either option 8.1 or 8.2, you will be prompted to save the visualization plots. If you choose to save them, the plots will be stored in the `./results/plots_without_amcl` or `./results/plots_with_amcl` directory, respectively.
+
+## Result 
+
+![Simulation Result](./results/MPPI_simulation_results.png)
+
+> **Note:** The image above shows an example of the robot's trajectory and goal-reaching performance in the simulation environment.
