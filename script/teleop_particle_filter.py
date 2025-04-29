@@ -1,147 +1,71 @@
 #!/usr/bin/python3
 
-#future imports
-from __future__ import print_function
+# This script is used to teleoperate the particle filter using keyboard inputs.
+# It allows the user to control the robot's movement and adjust the particle filter parameters in real-time.
+# The script uses the keyboard to send commands to the robot and the particle filter.
 
-#ros imports
+# The user can control the robot's movement using the 'w', 'a', 's', and 'd' keys.
+# w: move forward
+# a: turn left
+# s: move backward
+# d: turn right
+
 import rospy
 from geometry_msgs.msg import Twist
+import numpy as np
 
-#std imports
-from threading import Thread
-import time
-import sys
-from pynput import keyboard
+SPD = 1.5  # Speed of the robot
+ANG = np.pi/2  # Angular speed of the robot
 
+def teleop_particle_filter():
+    rospy.init_node('teleop_particle_filter', anonymous=True)
+    pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+    rate = rospy.Rate(10)  # 10 Hz
 
-#establish ros node and publisher to velocity
-rospy.init_node("teleop_robot")
-vel_pub = rospy.Publisher("/cmd_vel", Twist, queue_size=2)
+    twist = Twist()
 
-LIN_SPEED = 0.2
-ANG_SPEED = 1.0
+    # Setup the initial twist message
+    twist.linear.x = 0.0
+    twist.linear.y = 0.0
+    twist.linear.z = 0.0
+    twist.angular.x = 0.0
+    twist.angular.y = 0.0
+    twist.angular.z = 0.0
 
-vel_msg = Twist()
-key_state = {}
-def key_update(key, state):
+    print("Teleop Particle Filter")
+    print("Use 'w', 'a', 's', 'd' to control the robot")
+    print("Press 'q' to quit")
 
-    #key is pressed for the first time
-    if key not in key_state:
-        key_state[key] = state
-        return True
+    while not rospy.is_shutdown():
+        key = input("Enter command: ")
+        if key == 'w':
+            twist.linear.x = SPD
+            twist.angular.z = 0.0
+        elif key == 'a':
+            twist.linear.x = 0.0
+            twist.angular.z = ANG
+        elif key == 's':
+            twist.linear.x = -SPD
+            twist.angular.z = 0.0
+        elif key == 'd':
+            twist.linear.x = 0.0
+            twist.angular.z = -ANG
+        elif key == 'q':
+            break
+        else:
+            print("Invalid command")
 
-    # key changed state
-    if state != key_state[key]:
-        key_state[key] = state
-        return True
+        pub.publish(twist)
+        rate.sleep()
+    # Reset the twist message to stop the robot
+    twist.linear.x = 0.0
+    twist.angular.z = 0.0
+    pub.publish(twist)
+    print("Stopping the robot")
+    print("Exiting teleop_particle_filter")
 
-    #no change
-    return False
-
-
-
-stop_display = False
-def key_press(key):
-    if key == keyboard.Key.esc:
-        global stop_display
-        stop_display = True
-        print('\nPress Ctrl+C to exit')
-        return False
+if __name__ == '__main__':
     try:
-        #character input
-        k = key.char
-    except:
-        #arrow key/other input
-        k = key.name
-
-
-    #check if press changes state
-    change = key_update(key, True)
-    if change:
-        global vel_msg, LIN_SPEED, ANG_SPEED
-        if   k in ['w', 'up']:
-            vel_msg.linear.x += LIN_SPEED
-        elif k in ['s', 'down']:
-            vel_msg.linear.x -= LIN_SPEED
-        elif k in ['d', 'right']:
-            vel_msg.linear.y -= LIN_SPEED
-        elif k in ['a', 'left']:
-            vel_msg.linear.y += LIN_SPEED
-        elif k in ['e']:
-            vel_msg.angular.z -= ANG_SPEED
-        elif k in ['q']:
-            vel_msg.angular.z += ANG_SPEED
-        elif k in ['x']:
-            LIN_SPEED += 0.1
-        elif k in ['z']:
-            LIN_SPEED -= 0.1
-    return True
-    
-
-def key_release(key):
-    try:
-        #character input
-        k = key.char
-    except:
-        #arrow key/other input
-        k = key.name
-
-    change = key_update(key, False)
-    if change:
-        global vel_msg
-        if   k in ['w', 'up']:
-            vel_msg.linear.x = 0
-        elif k in ['s', 'down']:
-            vel_msg.linear.x = 0
-        elif k in ['d', 'right']:
-            vel_msg.linear.y = 0
-        elif k in ['a', 'left']:
-            vel_msg.linear.y = 0
-        elif k in ['e']:
-            vel_msg.angular.z = 0
-        elif k in ['q']:
-            vel_msg.angular.z = 0
-        elif k in ['x']:
-            pass
-        elif k in ['z']:
-            pass
-    return True
-    
-
-rate = rospy.Rate(10)
-def user_display():
-    print('Use WSAD or the ARROW KEYS to control Triton.\nUse Q & E to rotate Triton.\nUse x/z to increase/decrease speed')
-    while True:
-        try:
-            print('\r' + ' '*80,end='')
-            sys.stdout.flush()
-            log_str = "\r\t\tX: {}\tY: {}\tTHETA: {}\t".format(vel_msg.linear.x,
-                                                          vel_msg.linear.y,
-                                                          vel_msg.angular.z)
-            print(log_str, end=' ')
-            sys.stdout.flush()
-
-            global stop_display
-            if stop_display:
-                exit(0) 
-
-            if not rospy.is_shutdown():
-                rate.sleep()
-                vel_pub.publish(vel_msg)
-            else:
-                exit(0)
-        except KeyboardInterrupt:
-            exit(0)
-
-
-#start key listener thread
-key_listener = keyboard.Listener(on_press=key_press, on_release=key_release) 
-key_listener.start()
-
-#start user display thread
-display_thread = Thread(target=user_display)
-display_thread.start()
-
-#update ros topics on main thread
-rospy.spin()
-
+        teleop_particle_filter()
+    except rospy.ROSInterruptException:
+        pass
