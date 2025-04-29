@@ -29,7 +29,7 @@ sudo apt install ros-noetic-navigation ros-noetic-turtlebot3-gazebo
 
 2. Clone the repositories into the `src` folder:
     ```bash
-    git clone <repository_url>
+    git clone https://github.com/HuanMinpopcorn/triton_mppi.git
     ```
 
 3. Build the workspace using `catkin_make`:
